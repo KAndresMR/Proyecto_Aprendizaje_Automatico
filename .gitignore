@@ -1,0 +1,25 @@
+# Entornos virtuales
+venv/
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Datos
+data/
+test/
+
+# Modelos
+models/
+
+# Notebooks temporales
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

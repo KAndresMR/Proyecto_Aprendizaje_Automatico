@@ -1,0 +1,20 @@
+# tensorflow-macos==2.13.0 # probarlo localmente
+tensorflow==2.13.0 # para subirlo a Google Cloud
+numpy==1.24.3
+pandas==2.0.3
+scikit-learn==1.3.2
+joblib==1.3.2
+python-multipart==0.0.9
+
+fastapi==0.95.2
+uvicorn==0.22.0
+
+keras==2.13.1
+h5py==3.10.0
+
+openai==0.28.1
+langchain==0.0.351
+
+python-dotenv==1.0.1
+
+google-cloud-storage==2.10.0

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard Predicción de Stock</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="logo">📊</div>
+
+      <button class="side-btn active" data-target="#panel-main">
+        <span>📈</span>
+        <p>Predicción</p>
+      </button>
+
+      <button class="side-btn" data-target="#panel-update">
+        <span>🔄</span>
+        <p>Actualizar</p>
+      </button>
+
+      <button class="side-btn" data-target="#panel-settings">
+        <span>⚙️</span>
+        <p>Ajustes</p>
+      </button>
+    </div>
+
+    <div class="sidebar-bottom">
+      <div class="user-pic"></div>
+    </div>
+  </aside>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <main class="main-content">
+
+    <header class="top-header">
+      <h1> Dashboard de Predicción de Stock</h1>
+    </header>
+
+    <!-- CONTENEDOR DE PANTALLAS -->
+    <div class="page-container">
+
+      <!-- PANEL PRINCIPAL -->
+      <section id="panel-main" class="panel active">
+
+        <div class="card">
+          <h2>1. Parámetros de predicción</h2>
+
+          <div class="row">
+
+            <div class="field">
+              <label>Fecha para predicción</label>
+              <input type="date" id="fecha" />
+            </div>
+
+            <div class="field">
+              <label>Producto</label>
+              <select id="product_id">
+                <option value="">-- Selecciona --</option>
+                <option value="P001M">Manzana Roja</option>
+                <option value="P002B">Banano</option>
+                <option value="P003N">Naranja</option>
+                <option value="P004T">Tomate Riñón</option>
+                <option value="P005L">Lechuga</option>
+                <option value="P006Z">Zanahoria</option>
+              </select>
+            </div>
+
+            <div class="field checkbox-field">
+              <label>
+                <input type="checkbox" id="all_products" />
+                Todos los productos
+              </label>
+            </div>
+
+          </div>
+
+          <button id="btnPredict">Generar predicción</button>
+          <div id="status" class="status"></div>
+        </div>
+
+        <div class="card">
+          <h2>2. Resultados</h2>
+          <div id="results-container" class="table-wrapper">
+            Aún no hay resultados.
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>3. Conclusiones del LLM</h2>
+          <div id="llm-output" class="llm-box"></div>
+        </div>
+
+      </section>
+
+      <!-- PANEL UPDATE -->
+      <section id="panel-update" class="panel">
+        <div class="card">
+          <h2>Actualizar datos y reentrenar modelo</h2>
+
+          <p>Sube un archivo <strong>CSV</strong> con nuevos registros.</p>
+
+          <div class="row">
+            <div class="field">
+              <label for="csvFile">Archivo CSV</label>
+              <input type="file" id="csvFile" accept=".csv" />
+            </div>
+          </div>
+
+          <button id="btnUpdate">Actualizar modelo</button>
+          <div id="update-status" class="status"></div>
+        </div>
+      </section>
+
+      <!-- PANEL SETTINGS -->
+      <section id="panel-settings" class="panel">
+        <div class="card">
+          <h2>Ajustes</h2>
+          <p>Configuración adicional del sistema.</p>
+        </div>
+      </section>
+
+    </div>
+
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>
