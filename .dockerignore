@@ -1,0 +1,17 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.ipynb_checkpoints/
+*.ipynb
+
+# No subir datasets grandes crudos
+# dataset.csv
+# nuevos_registros.csv
+
+
+# No subir caches
+*.DS_Store
+.env

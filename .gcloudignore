@@ -1,0 +1,13 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+*.ipynb
+
+# Datos sin usar
+# dataset.csv
+# nuevos_registros.csv
+
+# Cosas de Mac
+.DS_Store
