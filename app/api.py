@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from ml.pipeline.update_dataset import simple_update_pipeline
-#from app.llm_service import generate_summary
+from app.llm_service import generate_summary
 
 
 
@@ -254,25 +254,37 @@ async def update_dataset(file: UploadFile = File(...)):
 # =========================================
 # Endpoint para generar resumen LLM
 # =========================================
-'''
+
 @app.post("/llm-summary")
-async def llm_summary(data: dict):
-
-    if "predictions" not in data:
-        raise HTTPException(status_code=400, detail="Falta 'predictions'")
-
-    try:
-        summary = generate_summary(data["predictions"])
-        return {"summary": summary}
-
-    except Exception as e:
-        print("\n================ LLM ERROR ================")
-        print(e)
-        print("===========================================\n")
-
+async def llm_summary(payload: dict):
+    """
+    Espera un body con:
+    {
+        "predictions": [ ... lista de dicts que devuelve /predict ... ]
+    }
+    """
+    if "predictions" not in payload:
         raise HTTPException(
-            status_code=500,
-            detail="Error generando resumen LLM."
+            status_code=400,
+            detail="Falta el campo 'predictions' en el body"
+        )
+    
+    predictions = payload["predictions"]
+
+    if not isinstance(predictions, list):
+        raise HTTPException(
+            status_code=400,
+            detail="'predictions' debe ser una lista"
         )
 
-'''
+    try:
+        summary = generate_summary(predictions)
+        return {"summary": summary}
+    except Exception as e:
+        print("\n===== LLM ERROR =====")
+        print(e)
+        print("=====================\n")
+        raise HTTPException(
+            status_code=500,
+            detail="Error generando resumen con LLM"
+        )
