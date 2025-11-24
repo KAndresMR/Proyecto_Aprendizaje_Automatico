@@ -1,174 +1,184 @@
-// URLs
-const API_PREDICT = "https://stock-api-1025275139192.us-central1.run.app/predict";
-const API_UPDATE  = "https://stock-api-1025275139192.us-central1.run.app/update-dataset";
-const API_SUMMARY = "https://stock-api-1025275139192.us-central1.run.app/llm-summary";
+// ================================
+// CONFIG
+// ================================
+const CONFIG = {
+  API_BASE: "https://stock-api-1025275139192.us-central1.run.app",
+  ENDPOINTS: {
+    predict: "/predict",
+    update: "/update-dataset",
+    summary: "/llm-summary"
+  }
+};
 
-// Sidebar navigation
-const tabs = document.querySelectorAll(".side-btn");
-const panels = document.querySelectorAll(".panel");
+// ================================
+// API CLIENT
+// ================================
+const api = {
+  async postJSON(path, body) {
+    const resp = await fetch(CONFIG.API_BASE + path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
 
-tabs.forEach(btn => {
+    if (!resp.ok) throw await parseError(resp);
+    return resp.json();
+  },
+
+  async postForm(path, formData) {
+    const resp = await fetch(CONFIG.API_BASE + path, {
+      method: "POST",
+      body: formData
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) throw data;
+    return data;
+  }
+};
+
+async function parseError(resp) {
+  try {
+    return await resp.json();
+  } catch {
+    return { detail: "Error inesperado del servidor" };
+  }
+}
+
+// ================================
+// UI HELPERS
+// ================================
+const ui = {
+  setText(id, text, type = "") {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.className = `status ${type}`;
+  },
+
+  renderTable(rows) {
+    if (!rows || rows.length === 0) {
+      document.getElementById("results-container").innerHTML = "Sin resultados.";
+      return;
+    }
+
+    const html = `
+      <table>
+        <tr>
+          <th>Producto</th>
+          <th>Fecha</th>
+          <th>Predicción</th>
+          <th>Estado</th>
+        </tr>
+        ${rows.map(r => `
+          <tr>
+            <td>${r.product_id}</td>
+            <td>${r.date}</td>
+            <td>${Number(r.pred_quantity_sold).toFixed(2)}</td>
+            <td>
+              <span class="badge ${r.alert === "CRITICO" ? "critico" : "ok"}">
+                ${r.alert}
+              </span>
+            </td>
+          </tr>
+        `).join("")}
+      </table>
+    `;
+    document.getElementById("results-container").innerHTML = html;
+  },
+
+  renderLLM(text) {
+    document.getElementById("llm-output").innerHTML =
+      text ? marked.parse(text) : "Sin conclusiones.";
+  }
+};
+
+// ================================
+// NAV
+// ================================
+document.querySelectorAll(".side-btn").forEach(btn => {
   btn.addEventListener("click", () => {
-    const target = btn.getAttribute("data-target");
+    const target = btn.dataset.target;
     if (!target) return;
 
-    tabs.forEach(b => b.classList.remove("active"));
-    panels.forEach(p => p.classList.remove("active"));
+    document.querySelectorAll(".side-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
 
     btn.classList.add("active");
     document.querySelector(target).classList.add("active");
   });
 });
 
-// ======= PREDICCIÓN =================
-const btn = document.getElementById("btnPredict");
-const statusDiv = document.getElementById("status");
-const resultsDiv = document.getElementById("results-container");
-const llmOut = document.getElementById("llm-output");
-
-btn.addEventListener("click", async () => {
-
+// ================================
+// PREDICT
+// ================================
+document.getElementById("btnPredict").addEventListener("click", async () => {
   const date = document.getElementById("fecha").value;
   const productId = document.getElementById("product_id").value;
   const allProducts = document.getElementById("all_products").checked;
 
-  if (!date) {
-    statusDiv.textContent = "Selecciona una fecha.";
-    return;
-  }
-
-  if (!allProducts && !productId) {
-    statusDiv.textContent = "Selecciona un producto o marca 'Todos'.";
-    return;
-  }
+  if (!date) return ui.setText("status", "Selecciona una fecha.", "error");
+  if (!allProducts && !productId)
+    return ui.setText("status", "Selecciona producto o todos.", "error");
 
   const payload = {
-    date: date,
-    all_products: allProducts
+    date,
+    all_products: allProducts,
+    ...(allProducts ? {} : { product_id: productId })
   };
 
-  if (!allProducts) {
-    payload.product_id = productId;
-  }
-
+  const btn = document.getElementById("btnPredict");
   btn.disabled = true;
-  statusDiv.textContent = "Consultando servicio...";
+  ui.setText("status", "Consultando modelo...");
 
-  let data = null;
+  let predictions = null;
 
   try {
-    const resp = await fetch(API_PREDICT, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(payload)
-    });
-
-    if (!resp.ok) {
-      statusDiv.textContent = "Error: " + resp.status;
-      resultsDiv.innerHTML = await resp.text();
-      btn.disabled = false;
-      return;
-    }
-
-    data = await resp.json();
-
-    let html = `
-      <table>
-        <tr>
-          <th>Producto</th>
-          <th>Fecha</th>
-          <th>Predicción</th>
-          <th>Alerta</th>
-        </tr>
-    `;
-
-    data.forEach(row => {
-      html += `
-        <tr>
-          <td>${row.product_id}</td>
-          <td>${row.date}</td>
-          <td>${row.pred_quantity_sold.toFixed(2)}</td>
-          <td>
-            <span class="badge ${row.alert === "CRITICO" ? "critico" : "ok"}">${row.alert}</span>
-          </td>
-        </tr>
-      `;
-    });
-
-    html += "</table>";
-    resultsDiv.innerHTML = html;
-
-    statusDiv.textContent = "OK";
-
-  } catch (err) {
-    statusDiv.textContent = "Error llamando al servicio";
+    predictions = await api.postJSON(CONFIG.ENDPOINTS.predict, payload);
+    ui.renderTable(predictions);
+    ui.setText("status", "OK", "ok");
+  } catch (e) {
+    ui.setText("status", e.detail || "Error en predicción", "error");
+    btn.disabled = false;
+    return;
   }
 
-  // LLM SUMMARY
+  // LLM
   try {
-    const respLLM = await fetch(API_SUMMARY, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ predictions: data })
+    const llm = await api.postJSON(CONFIG.ENDPOINTS.summary, {
+      predictions
     });
-
-    if (!respLLM.ok) {
-      llmOut.innerHTML = "No se pudo generar el resumen.";
-    } else {
-      const dataLLM = await respLLM.json();
-      llmOut.innerHTML = marked.parse(dataLLM.summary);
-    }
-
-  } catch (e) {
-    llmOut.innerHTML = "Error llamando al LLM.";
+    ui.renderLLM(llm.summary);
+  } catch {
+    ui.renderLLM("No se pudo generar el resumen.");
   }
 
   btn.disabled = false;
 });
 
+// ================================
+// UPDATE DATASET
+// ================================
+document.getElementById("btnUpdate").addEventListener("click", async () => {
+  const file = document.getElementById("csvFile").files[0];
+  if (!file) return ui.setText("update-status", "Selecciona un archivo", "error");
 
-// =========== UPDATE MODEL ====================
-const btnUpdate = document.getElementById("btnUpdate");
-const updateStatus = document.getElementById("update-status");
-const fileInput = document.getElementById("csvFile");
+  const form = new FormData();
+  form.append("file", file);
 
-btnUpdate.addEventListener("click", async () => {
-  const file = fileInput.files[0];
-
-  if (!file) {
-    updateStatus.textContent = "Selecciona un archivo CSV primero.";
-    updateStatus.className = "status error";
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append("file", file);
-
-  btnUpdate.disabled = true;
-  updateStatus.textContent = "Actualizando modelo...";
+  const btn = document.getElementById("btnUpdate");
+  btn.disabled = true;
+  ui.setText("update-status", "Actualizando...");
 
   try {
-    const resp = await fetch(API_UPDATE, {
-      method: "POST",
-      body: formData
-    });
-
-    const data = await resp.json();
-
-    if (!resp.ok) {
-      updateStatus.textContent = "Error: " + (data.detail || resp.status);
-      updateStatus.className = "status error";
-      return;
-    }
-
-    updateStatus.textContent = "Actualización completada";
-    updateStatus.className = "status ok";
-
-  } catch (err) {
-    updateStatus.textContent = "Error llamando al servicio.";
-    updateStatus.className = "status error";
+    const data = await api.postForm(CONFIG.ENDPOINTS.update, form);
+    ui.setText(
+      "update-status",
+      `Actualizado. Registros añadidos: ${data.rows_added}`,
+      "ok"
+    );
+  } catch (e) {
+    ui.setText("update-status", e.detail || "Error actualizando", "error");
   }
 
-  btnUpdate.disabled = false;
+  btn.disabled = false;
 });
-``
