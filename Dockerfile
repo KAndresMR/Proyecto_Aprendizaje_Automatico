@@ -1,15 +1,20 @@
-FROM python:3.10
+FROM python:3.10-slim
 
 # Carpeta de trabajo dentro del contenedor
 WORKDIR /app
 
-# Copiar dependencias primero (mejora cache de Docker)
-COPY . .
-
-# Instalar dependencias
+# Instalar dependencias primero
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Exponer puerto de Cloud Run
+RUN pip install python-multipart
+
+# Copiar solo el codigo necesario
+COPY app/ app/
+COPY ml/ ml/
+COPY models/ models/
+COPY data/ data/
+
 EXPOSE 8080
 
 # Comando de arranque

@@ -6,15 +6,16 @@ import shutil
 import numpy as np
 import pandas as pd
 
-from keras import models
+from io import BytesIO
+from tensorflow.keras import models
 from datetime import datetime
 from datetime import timedelta
 from pydantic import BaseModel
-from app.llm_service import generate_summary
-from fastapi.middleware.cors import CORSMiddleware
-from ml.pipeline.update_dataset import run_incremental_update
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from ml.pipeline.update_dataset import simple_update_pipeline
+#from app.llm_service import generate_summary
+
 
 
 
@@ -35,16 +36,32 @@ app.add_middleware(
 # =========================================
 # Cargar recursos del modelo
 # =========================================
+model = None
+scalers = None
+features = None
+df = None
+PRODUCTS = []
 
-model = models.load_model("models/modelo_lstm_optimo.h5")
-scalers = joblib.load("models/scalers_lstm_optimo.save")
-features = joblib.load("models/features_lstm_optimo.save")
+def load_resources():
+    model = models.load_model("models/modelo_lstm_optimo.h5", compile=False)
+    scalers = joblib.load("models/scalers_lstm_optimo.save")
+    features = joblib.load("models/features_lstm_optimo.save")
+    df = pd.read_csv("data/processed/dataset_final.csv", parse_dates=["date"])
+    df = df.sort_values(["product_id", "date"])
+    return model, scalers, features, df
 
-df = pd.read_csv("data/processed/dataset_final.csv", parse_dates=["date"])
+#model, scalers, features, df = load_resources()
+@app.on_event("startup")
+def startup_event():
+    global model, scalers, features, df, PRODUCTS
+    try:
+        model, scalers, features, df = load_resources()
+        PRODUCTS = list(scalers.keys())
+        print("DF shape:", df.shape)
+        print("Recursos cargados correctamente")
+    except Exception as e:
+        print("Error cargando recursos:", e)
 
-df = df.sort_values(["product_id", "date"])
-
-PRODUCTS = list(scalers.keys())
 
 # =========================================
 # Body esperado por /predict
@@ -62,6 +79,12 @@ class PredictRequest(BaseModel):
 
 def predict_until_date(df, model, scalers, product_id, target_date, seq_len):
     df_p = df[df["product_id"] == product_id].sort_values("date")
+    
+    if df_p.empty:
+        raise ValueError(f"No hay datos históricos para {product_id}")
+    
+    if len(df_p) < seq_len:
+        raise ValueError("Histórico insuficiente para generar secuencia.")
 
     last_date = df_p["date"].max()
 
@@ -99,6 +122,12 @@ def predict_until_date(df, model, scalers, product_id, target_date, seq_len):
 
 @app.post("/predict")
 def predict(req: PredictRequest):
+    
+    if model is None or scalers is None or df is None:
+        raise HTTPException(
+            status_code=500, 
+            detail="Recursos del modelo aún no cargados."
+        )
 
     # Validaciones
     if not req.all_products and not req.product_id:
@@ -121,7 +150,12 @@ def predict(req: PredictRequest):
         if req.product_id not in scalers:
             raise HTTPException(status_code=404, detail="Producto no encontrado.")
 
-        pred = predict_until_date(df, model, scalers, req.product_id, req.date, req.seq_len)
+        pred = predict_until_date(
+            df, model, scalers, 
+            req.product_id, 
+            req.date, 
+            req.seq_len
+        )
         df_p = df[df["product_id"] == req.product_id]
 
         mu = df_p["quantity_sold"].mean()
@@ -146,20 +180,37 @@ def predict(req: PredictRequest):
     # --------------------------
     # CASO 2: TODOS LOS PRODUCTOS
     # --------------------------
-    all_preds = []
+    results = []
 
     for prod in scalers.keys():
-        pred = predict_until_date(df, model, scalers, prod, req.date, req.seq_len)
-        alert = "CRITICO" if pred <= 80 else "OK"
 
-        all_preds.append({
+        pred = predict_until_date(
+            df, model, scalers,
+            prod, req.date, req.seq_len
+        )
+
+        df_p = df[df["product_id"] == prod]
+
+        mu = df_p["quantity_sold"].mean()
+        sigma = df_p["quantity_sold"].std()
+        stock_min = max(mu - sigma, 0)
+        warning = stock_min * 1.20
+
+        if pred <= stock_min:
+            alert = "CRITICO"
+        elif pred <= warning:
+            alert = "ADVERTENCIA"
+        else:
+            alert = "OK"
+
+        results.append({
             "product_id": prod,
             "date": req.date,
             "pred_quantity_sold": pred,
             "alert": alert
         })
 
-    return all_preds
+    return results
         
 # =========================================
 # Endpoint para actualizar dataset
@@ -167,54 +218,43 @@ def predict(req: PredictRequest):
 
 @app.post("/update-dataset")
 async def update_dataset(file: UploadFile = File(...)):
+
     if not file.filename.endswith(".csv"):
-        raise HTTPException(status_code=400, detail="Solo se aceptan archivos CSV.")
+        raise HTTPException(status_code=400, detail="Solo se aceptan CSV")
 
-    temp_path = "data/raw/dataset_2022.csv"
+    contents = await file.read()
+    df_new = pd.read_csv(BytesIO(contents), parse_dates=["date"])
 
-    # 1) Guardar el archivo subido
     try:
-        with open(temp_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"No se pudo guardar el archivo temporal: {str(e)}")
-
-    # 2) Ejecutar pipeline incremental
-    try:
-        resultado = run_incremental_update(
-            path_base_raw="data/raw/dataset_local.csv",
-            path_new_raw=temp_path,
-            path_dataset_final="data/processed/dataset_final.csv",
-            path_model="models/modelo_lstm_optimo.h5",
+        result = simple_update_pipeline(
+            base_path="data/raw/dataset_local.csv",
+            df_new=df_new,
+            final_path="data/processed/dataset_final.csv",
+            model_path="models/modelo_lstm_optimo.h5"
         )
-
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error en la actualización: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-
-    # 3) Recargar artefactos actualizados
+    # Recargar recursos
     global model, scalers, features, df
-
-    model = models.load_model("models/modelo_lstm_optimo.h5")
+    model = models.load_model("models/modelo_lstm_optimo.h5", compile=False)
     scalers = joblib.load("models/scalers_lstm_optimo.save")
     features = joblib.load("models/features_lstm_optimo.save")
-
-    df = pd.read_csv("data/processed/dataset_final.csv", parse_dates=["date"]).sort_values(["product_id", "date"])
+    df = pd.read_csv(
+        "data/processed/dataset_final.csv",
+        parse_dates=["date"]
+    ).sort_values(["product_id", "date"])
 
     return {
-        "status": "success",
-        "message": "Dataset actualizado y modelo reentrenado.",
-        "details": resultado
+        "status": "ok",
+        "msg": "Dataset actualizado y modelo reentrenado",
+        "rows_added": result["rows_added"]
     }
-
+    
 # =========================================
 # Endpoint para generar resumen LLM
 # =========================================
-
+'''
 @app.post("/llm-summary")
 async def llm_summary(data: dict):
 
@@ -234,3 +274,5 @@ async def llm_summary(data: dict):
             status_code=500,
             detail="Error generando resumen LLM."
         )
+
+'''

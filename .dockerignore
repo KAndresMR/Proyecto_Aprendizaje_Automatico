@@ -7,11 +7,8 @@ __pycache__/
 .ipynb_checkpoints/
 *.ipynb
 
-# No subir datasets grandes crudos
-# dataset.csv
-# nuevos_registros.csv
+.git/
+.gitignore
 
-
-# No subir caches
-*.DS_Store
+.DS_Store
 .env

@@ -9,11 +9,11 @@ PRODUCTS = ["P001M", "P002B", "P003N", "P004T", "P005L", "P006Z"]
 
 PRODUCT_NAMES = {
     "P001M": "Manzana Roja",
-    "P002B": "Banano Maduro",
-    "P003N": "Naranja Dulce",
+    "P002B": "Banano",
+    "P003N": "Naranja",
     "P004T": "Tomate Riñón",
-    "P005L": "Lechuga Fresca",
-    "P006Z": "Zapallo Andino"
+    "P005L": "Lechuga",
+    "P006Z": "Zanahoria"
 }
 
 COLUMNS = [
@@ -53,11 +53,9 @@ STOCK_TARGET = {
 
 def season_from_month(m):
     if m in [12, 1, 2]:
-        return "época lluviosa"
+        return "lluvioso"
     elif m in [6, 7, 8]:
-        return "época seca"
-    else:
-        return "transición"
+        return "seca"
 
 def demand_factor(date):
     """Pequeña corrección a la demanda según temporada y festivos."""

@@ -1,13 +1,22 @@
-venv/
+# Modelo pesado (si no quieres subirlo así)
+# Notebooks
+notebooks/
+
+# Frontend no necesario para API
+frontend/
+
+# Scripts auxiliares
+generar_datasets/
+test/
+
+# Cache
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 .ipynb_checkpoints/
-*.ipynb
+.env
 
-# Datos sin usar
-# dataset.csv
-# nuevos_registros.csv
-
-# Cosas de Mac
-.DS_Store
+# Git
+.git/
+.gitignore
