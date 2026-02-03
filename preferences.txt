@@ -5,6 +5,9 @@ sqlalchemy
 logoru
 aioinject
 uvicorn
-'strawberry-graphql[fastapi]'
 langchain_openai
 pandas
+
+
+
+'strawberry-graphql[fastapi]'
