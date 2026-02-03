@@ -7,6 +7,7 @@ Maps to the existing product_stocks table in the public schema.
 from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
+from sqlalchemy import text
 
 from sqlalchemy import Boolean, Date, DateTime, Integer, Numeric, SmallInteger, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -31,10 +32,10 @@ class ProductStock(Base):
 
     # Primary key
     id: Mapped[UUID] = mapped_column(
-        PG_UUID(as_uuid=True),
-        primary_key=True,
-        server_default="gen_random_uuid()",
-    )
+    PG_UUID(as_uuid=True),
+    primary_key=True,
+    server_default=text("gen_random_uuid()"),
+)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(

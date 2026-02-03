@@ -22,7 +22,7 @@ def create_async_engine(database_url: str) -> AsyncEngine:
     Returns:
         AsyncEngine instance
     """
-    return sa_create_async_engine(
+    return sa_create_async_engine(  
         database_url,
         poolclass=NullPool,  # Recommended for async
         echo=False,
