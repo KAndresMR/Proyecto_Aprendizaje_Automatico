@@ -1,125 +1,110 @@
-import cv2
-import numpy as np
-import joblib
-import os
+"""
+Image Classifier Model.
+
+Example implementation of BaseModel for image classification.
+Supports Keras/TensorFlow and PyTorch models.
+"""
+
+from typing import Any
 from pathlib import Path
 
-class SIFTEngine:
-    def __init__(self, storage_path="sift_data.pkl"):
-        self.storage_path = storage_path
-        self.sift = cv2.SIFT_create()
-        # Storage format: { "product_name": [descriptors_1, descriptors_2, ...] }
-        # Or simpler: { "product_name": descriptors } if User implies 1 reference image implies 1 descriptor set
-        self.database = {} 
-        self.load_database()
+from ml.models.base import BaseModel
 
-    def load_database(self):
-        if os.path.exists(self.storage_path):
-            try:
-                self.database = joblib.load(self.storage_path)
-                print(f"Loaded SIFT database with {len(self.database)} products.")
-            except Exception as e:
-                print(f"Failed to load database: {e}")
-                self.database = {}
-        else:
-            self.database = {}
 
-    def save_database(self):
-        joblib.dump(self.database, self.storage_path)
-        print("SIFT database saved.")
+class ImageClassifier(BaseModel):
+    """
+    Image classification model wrapper.
 
-        # MLflow logging
-        try:
-            import mlflow
-            mlflow.set_experiment("SIFT_Product_Registry")
-            with mlflow.start_run():
-                mlflow.log_artifact(self.storage_path)
-                mlflow.log_metric("product_count", len(self.database))
-                print("Logged version to MLflow.")
-        except Exception as e:
-            print(f"MLflow logging failed: {e}")
+    Supports loading models from:
+    - Keras H5 format (.h5)
+    - Keras JSON + weights (model.json + weights.h5)
+    - TensorFlow SavedModel format (directory)
+    - PyTorch (.pt, .pth)
+    - ONNX (.onnx)
+    """
 
-    def register_product(self, name, image_bgr, mask=None, contrast_threshold=0.04, edge_threshold=10):
+    model_type: str = "image"
+    input_shape: tuple[int, ...] = (224, 224, 3)
+
+    def __init__(self) -> None:
+        """Initialize classifier."""
+        super().__init__()
+        self._class_labels: list[str] = []
+
+    async def load(self, path: str | Path) -> None:
         """
-        Compute features for reference image and store them.
-        contrast_threshold: The contrast threshold used to filter out weak features.
-        edge_threshold: The threshold used to filter out edge-like features.
+        Load classification model from path.
+
+        Args:
+            path: Path to model file or directory
         """
-        gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
-        
-        # Configure SIFT
-        if contrast_threshold != 0.04 or edge_threshold != 10:
-            self.sift = cv2.SIFT_create(contrastThreshold=contrast_threshold, edgeThreshold=edge_threshold)
-        else:
-            # Reset to default if matches default, or just create new one
-            self.sift = cv2.SIFT_create()
+        # Here your code for:
+        # 1. Detect model format (h5, json+weights, savedmodel, pt, onnx)
+        # 2. Load model using appropriate framework
+        # 3. Set self._model and self._is_loaded
+        pass
 
-        keypoints, descriptors = self.sift.detectAndCompute(gray, mask)
-        
-        if descriptors is None:
-            return False, "No features detected in image."
-            
-        self.database[name] = descriptors
-        self.save_database()
-        return True, f"Registered '{name}' with {len(keypoints)} features."
-
-    def detect_keypoints_vis(self, image_bgr, mask=None, contrast_threshold=0.04, edge_threshold=10):
+    async def predict(self, data: Any) -> dict[str, Any]:
         """
-        Return image with keypoints drawn for visualization.
+        Run classification on preprocessed image.
+
+        Args:
+            data: Preprocessed image array (normalized, correct shape)
+
+        Returns:
+            Dict with prediction, confidence, and metadata
         """
-        gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
-        
-        # Temp SIFT with params
-        sift_temp = cv2.SIFT_create(contrastThreshold=contrast_threshold, edgeThreshold=edge_threshold)
-        
-        keypoints = sift_temp.detect(gray, mask)
-        
-        vis_img = cv2.drawKeypoints(image_bgr, keypoints, None, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-        return vis_img, len(keypoints)
+        # Here your code for:
+        # 1. Ensure model is loaded
+        # 2. Add batch dimension if needed
+        # 3. Run model.predict()
+        # 4. Get top prediction index and confidence
+        # 5. Map to class label if available
+        # 6. Return formatted result
+        pass
 
-    def identify_product(self, query_image_bgr, min_match_count=10):
+    async def predict_batch(self, data_list: list[Any]) -> list[dict[str, Any]]:
         """
-        Compare query image against all registered products.
-        Returns the best match label.
+        Optimized batch prediction.
+
+        Args:
+            data_list: List of preprocessed images
+
+        Returns:
+            List of prediction results
         """
-        gray_query = cv2.cvtColor(query_image_bgr, cv2.COLOR_BGR2GRAY)
-        kp_q, des_q = self.sift.detectAndCompute(gray_query, None)
-        
-        if des_q is None:
-            return None, 0
+        # Here your code for optimized batch inference
+        pass
 
-        bf = cv2.BFMatcher()
-        best_label = None
-        max_matches = 0
-        
-        # Iterate all products
-        for name, des_ref in self.database.items():
-            if des_ref is None: 
-                continue
-                
-            # KNN Match
-            matches = bf.knnMatch(des_ref, des_q, k=2)
-            
-            # Ratio Test
-            good = []
-            for m, n in matches:
-                if m.distance < 0.75 * n.distance:
-                    good.append(m)
-            
-            if len(good) > max_matches:
-                max_matches = len(good)
-                best_label = name
+    def set_class_labels(self, labels: list[str]) -> None:
+        """
+        Set class label names for predictions.
 
-        if max_matches >= min_match_count:
-            return best_label, max_matches
-        else:
-            return None, max_matches
+        Args:
+            labels: List of class names (index corresponds to model output)
+        """
+        self._class_labels = labels
 
-# Singleton
-_sift_instance = None
+    def get_class_labels(self) -> list[str]:
+        """Get configured class labels."""
+        return self._class_labels
 
-def get_sift_engine(storage_path="sift_data.pkl"):
-    global _sift_instance
-    if _sift_instance is None:
-        _sift_instance = SIFTEngine(storage_path)
-    return _sift_instance
+    async def _load_keras_h5(self, path: Path) -> None:
+        """Load Keras H5 model."""
+        # Here your code for loading Keras H5 model
+        pass
+
+    async def _load_keras_json_weights(self, json_path: Path) -> None:
+        """Load Keras model from JSON architecture + H5 weights."""
+        # Here your code for loading JSON + weights (like Django CNN project)
+        pass
+
+    async def _load_pytorch(self, path: Path) -> None:
+        """Load PyTorch model."""
+        # Here your code for loading PyTorch model
+        pass
+
+    async def _load_onnx(self, path: Path) -> None:
+        """Load ONNX model."""
+        # Here your code for loading ONNX model
+        pass

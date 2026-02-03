@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from mlflow.entities import ViewType
 
 # este es el motor de reconocimiento de productos
-from ml.models.image_classifier import get_sift_engine
+from ml.models.sift_engine import get_sift_engine
 
 router = APIRouter()
 
