@@ -20,11 +20,13 @@ import strawberry
 import uvicorn
 from aioinject.ext.strawberry import AioInjectExtension
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from strawberry.fastapi import GraphQLRouter
 from fastapi.staticfiles import StaticFiles
 
 from api.graphql.queries import BusinessQuery
+from api.rest.routes2 import router as product_router
 from container import create_business_container
 
 
@@ -49,6 +51,15 @@ def create_business_backend_app() -> FastAPI:
     name="imagenes_productos",
 )
 
+    # Configure CORS
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Allows all origins
+        allow_credentials=True,
+        allow_methods=["*"],  # Allows all methods
+        allow_headers=["*"],  # Allows all headers
+    )
+
     # Create business_backend's own DI container
     container = create_business_container()
     logger.info("✅ Business Backend DI container created")
@@ -69,6 +80,9 @@ def create_business_backend_app() -> FastAPI:
     )
     app.include_router(graphql_app, prefix="/graphql")
 
+    # Register Product Recognition Router (from routes2.py)
+    app.include_router(product_router)
+
     # Health check endpoint
     @app.get("/health")
     async def health():
@@ -87,6 +101,7 @@ def create_business_backend_app() -> FastAPI:
             "version": "1.0.0",
             "graphql_endpoint": "/graphql",
             "graphiql_ui": "/graphql (browser)",
+            "product_recognition_endpoints": ["/register", "/predict", "/preview_keypoints"],
             "health_check": "/health",
             "docs": "/docs",
         }
