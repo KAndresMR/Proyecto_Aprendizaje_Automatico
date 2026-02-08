@@ -1,9 +1,110 @@
-
-## Archivos de ia
-*.pkl
-
-## Carpetas
-.venv/ 
+# =========================
+# PYTHON
+# =========================
 __pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
 
-.vscode
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+**/.venv/
+**/venv/
+**/env/
+**/ENV/
+
+# Python tooling caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+**/.mypy_cache/
+**/.pytest_cache/
+**/.ruff_cache/
+
+# =========================
+# MODELOS / IA
+# =========================
+*.pkl
+*.h5
+*.pt
+*.onnx
+*.joblib
+
+# =========================
+# ARCHIVOS GENERADOS (OCR / UPLOADS)
+# =========================
+uploads/
+backend/uploads/
+output/
+results/
+temp/
+tmp/
+**/uploads/
+**/output/
+**/results/
+**/temp/
+**/tmp/
+
+# =========================
+# IMÁGENES Y MEDIOS
+# (NO subir fotos capturadas)
+# =========================
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.bmp
+*.tiff
+*.gif
+*.mp4
+*.mov
+
+# =========================
+# LOGS
+# =========================
+*.log
+logs/
+
+# =========================
+# FRONTEND
+# =========================
+node_modules/
+dist/
+build/
+**/node_modules/
+**/dist/
+**/build/
+
+# =========================
+# EDITORES / OS
+# =========================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# =========================
+# LIVE SERVER / CACHE
+# =========================
+.cache/
+.history/
+**/.cache/
+**/.history/
+
+# Jupyter
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+# =========================
+# ENV / SECRETS
+# =========================
+.env
+.env.*

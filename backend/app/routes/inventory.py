@@ -17,6 +17,7 @@ import logging
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/inventory", tags=["Inventory"])
 
+
 @router.post("/from-images", response_model=OCRResult)
 async def process_images_from_camera(
     photo_0: Optional[UploadFile] = File(None),

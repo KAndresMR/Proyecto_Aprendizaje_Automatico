@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Inventario</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        
+        <!-- PANTALLA 1: CÁMARA -->
+        <div id="cameraScreen" class="screen active">
+            <div class="header">
+                <h1>📦 Registro de Producto</h1>
+                <p class="step-indicator" id="stepIndicator">Foto 1 de 4: Vista Frontal</p>
+            </div>
+
+            <div class="camera-container">
+                <video id="videoElement" autoplay playsinline></video>
+                <canvas id="canvas" style="display: none;"></canvas>
+                
+                <div class="camera-overlay">
+                    <div class="frame-guide"></div>
+                </div>
+
+                <button class="capture-btn" id="captureBtn" type="button">
+                    <span class="camera-icon">📷</span>
+                </button>
+            </div>
+
+            <div class="instructions" id="instructions">
+                <p>Coloque el producto centrado en el recuadro</p>
+            </div>
+        </div>
+
+        <!-- PANTALLA 2: PREVIEW DE FOTO TOMADA -->
+        <div id="previewScreen" class="screen">
+            <div class="header">
+                <h1>Vista Previa</h1>
+            </div>
+
+            <div class="preview-container">
+                <img id="previewImage" src="" alt="Preview">
+            </div>
+
+            <div class="preview-actions">
+                <button class="btn btn-secondary" id="retakeBtn" type="button">
+                    <span>🔄</span>
+                    Tomar otra vez
+                </button>
+                <button class="btn btn-primary" id="confirmPhotoBtn" type="button">
+                    <span>✓</span>
+                    Continuar
+                </button>
+            </div>
+        </div>
+
+        <!-- PANTALLA 3: GALERÍA DE FOTOS TOMADAS -->
+        <div id="galleryScreen" class="screen">
+            <div class="header">
+                <h1>Fotos Capturadas</h1>
+                <p class="subtitle">Revise las fotos antes de procesar</p>
+            </div>
+
+            <div class="photo-grid" id="photoGrid">
+                <!-- Las fotos se insertan dinámicamente -->
+            </div>
+
+            <div class="gallery-actions">
+                <button class="btn btn-secondary" id="addMoreBtn" type="button">
+                    <span>📷</span>
+                    Tomar más fotos
+                </button>
+                <button class="btn btn-primary" id="processBtn" type="button" onclick="return false;">
+                    <span>🔍</span>
+                    Procesar Producto
+                </button>
+            </div>
+        </div>
+
+        <!-- PANTALLA 4: PROCESANDO -->
+        <div id="processingScreen" class="screen">
+            <div class="processing-content">
+                <div class="spinner-large"></div>
+                <h2>Procesando...</h2>
+                <p id="processingStatus">Preparando imágenes...</p>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                
+                <p class="processing-note">Este proceso puede tardar 1-2 minutos</p>
+            </div>
+        </div>
+
+        <!-- PANTALLA 5: FORMULARIO -->
+        <div id="formScreen" class="screen">
+            <div class="header">
+                <h1>Datos del Producto</h1>
+                <p class="subtitle">Verifique y complete la información</p>
+            </div>
+
+            <div class="product-summary">
+                <div class="product-image-mini" id="productImageMini"></div>
+                <div class="confidence-badge" id="confidenceBadge"></div>
+            </div>
+
+            <form id="productForm" class="product-form">
+                <div class="form-field">
+                    <label>Nombre *</label>
+                    <input type="text" id="name" placeholder="Ej: Leche Entera" required>
+                </div>
+
+                <div class="form-field">
+                    <label>Marca *</label>
+                    <input type="text" id="brand" placeholder="Ej: Gloria" required>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-field">
+                        <label>Presentación</label>
+                        <input type="text" id="presentation" placeholder="Ej: Caja">
+                    </div>
+
+                    <div class="form-field">
+                        <label>Tamaño *</label>
+                        <input type="text" id="size" placeholder="1000 ml" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-field">
+                        <label>Código de Barras</label>
+                        <input type="text" id="barcode" placeholder="7501234567890">
+                    </div>
+
+                    <div class="form-field">
+                        <label>Lote</label>
+                        <input type="text" id="batch" placeholder="L12345">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-field">
+                        <label>Vencimiento</label>
+                        <input type="date" id="expiry">
+                    </div>
+
+                    <div class="form-field">
+                        <label>Precio</label>
+                        <input type="number" id="price" step="0.01" placeholder="0.00">
+                    </div>
+                </div>
+
+                <div class="warning-box" id="warningBox" style="display: none;"></div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelFormBtn">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-success">
+                        <span>💾</span>
+                        Guardar Producto
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- PANTALLA 6: ÉXITO -->
+        <div id="successScreen" class="screen">
+            <div class="success-content">
+                <div class="success-icon">✅</div>
+                <h2>¡Producto Registrado!</h2>
+                <p id="successMessage"></p>
+                
+                <button class="btn btn-primary" id="newProductBtn" type="button">
+                    <span>➕</span>
+                    Registrar Otro Producto
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

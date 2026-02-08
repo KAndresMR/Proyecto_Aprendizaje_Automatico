@@ -1,12 +1,11 @@
 import easyocr
 import cv2
 import numpy as np
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 import logging
 from app.config import settings
 import time
 from concurrent.futures import ThreadPoolExecutor
-import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +19,7 @@ class OCRService:
     def _initialize_engine(self):
         """Inicializar el motor OCR"""
         try:
-            if self.engine == "easyocr":
+            if self.engine.lower() == "easyocr":
                 logger.info("Inicializando EasyOCR...")
                 self.reader = easyocr.Reader(
                     self.languages, 
@@ -35,111 +34,87 @@ class OCRService:
             logger.error(f"❌ Error inicializando OCR: {e}")
             raise
     
-    def preprocess_image(self, image_path: str) -> np.ndarray:
-        """Preprocesar imagen para mejorar OCR"""
-        try:
-            img = cv2.imread(image_path)
-            
-            if img is None:
-                logger.error(f"No se pudo leer la imagen: {image_path}")
-                return None
-            
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-            enhanced = clahe.apply(gray)
-            denoised = cv2.fastNlMeansDenoising(enhanced, h=10)
-            binary = cv2.adaptiveThreshold(
-                denoised, 255, 
-                cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                cv2.THRESH_BINARY, 
-                11, 2
-            )
-            
-            return binary
-            
-        except Exception as e:
-            logger.error(f"Error en preprocesamiento: {e}")
-            return cv2.imread(image_path)
-    
-    def extract_text(self, image_path: str) -> Tuple[str, float]:
-        """Extraer texto de una imagen"""
-        start_time = time.time()
-        
-        try:
-            processed_img = self.preprocess_image(image_path)
-            
-            if processed_img is None:
-                logger.error(f"Imagen no válida: {image_path}")
-                return "", 0.0
-            
-            results = self.reader.readtext(
-                processed_img,
-                detail=1,
-                paragraph=False,
-                min_size=10,
-                text_threshold=0.7,
-                low_text=0.4
-            )
-            
-            texts = []
-            confidences = []
-            
-            for (bbox, text, confidence) in results:
-                if confidence > 0.3:
-                    texts.append(text)
-                    confidences.append(confidence)
-            
-            full_text = " ".join(texts)
-            avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
-            
-            processing_time = time.time() - start_time
-            
-            logger.info(f"OCR completado en {processing_time:.2f}s - Confianza: {avg_confidence:.2f} - Texto: '{full_text[:50]}...'")
-            
-            return full_text, float(avg_confidence)
-            
-        except Exception as e:
-            logger.error(f"❌ Error en OCR: {e}")
-            return "", 0.0
-    
+    def preprocess_image(self, image_path: str) -> List[np.ndarray]:
+        """Generar variantes de la imagen para mejorar OCR"""
+        img = cv2.imread(image_path)
+        if img is None:
+            logger.error(f"No se pudo leer la imagen: {image_path}")
+            return []
+
+        variants = []
+
+        # Original
+        variants.append(img)
+
+        # Grayscale
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        variants.append(gray)
+
+        # CLAHE
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        enhanced = clahe.apply(gray)
+        variants.append(enhanced)
+
+        # Blur ligero
+        blur = cv2.GaussianBlur(enhanced, (3, 3), 0)
+        variants.append(blur)
+
+        return variants
+
+    def process_variants(self, image_path: str) -> Tuple[str, float]:
+        """
+        OCR en todas las variantes de la imagen y devuelve texto combinado y confianza promedio
+        """
+        variants = self.preprocess_image(image_path)
+        all_text = []
+        confidences = []
+
+        for img in variants:
+            results = self.reader.readtext(img, detail=1, paragraph=True)
+            for item in results:
+                # EasyOCR puede devolver (bbox, text, conf)
+                if isinstance(item, list) and len(item) >= 2:
+                    text = item[1] if len(item) > 1 else ""
+                    conf = float(item[2]) if len(item) > 2 else 0.0
+                    if isinstance(text, list):
+                        text = " ".join(text)  # Convertir listas internas a string
+                    all_text.append(text)
+                    confidences.append(conf)
+
+        full_text = " ".join(all_text)
+        avg_conf = sum(confidences) / len(confidences) if confidences else 0.0
+        return full_text, avg_conf
+
     def _extract_single_image(self, img_type: str, img_path: str) -> Tuple[str, Dict]:
-        """Extraer texto de una sola imagen (para ejecución paralela)"""
-        text, confidence = self.extract_text(img_path)
+        text, confidence = self.process_variants(img_path)
         return img_type, {
             "text": text,
-            "confidence": float(confidence)
+            "confidence": confidence
         }
     
     def extract_from_multiple_images(self, image_paths: Dict[str, str]) -> Dict:
-        """
-        🔹 MEJORADO: Extraer texto de múltiples imágenes EN PARALELO
-        """
+        """OCR paralelo para múltiples imágenes usando process_variants"""
         start_time = time.time()
         logger.info(f"🚀 Iniciando OCR paralelo de {len(image_paths)} imágenes...")
-        
+
         results = {}
-        
-        # 🔹 Ejecutar OCR en paralelo usando ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=3) as executor:
             futures = [
                 executor.submit(self._extract_single_image, img_type, img_path)
                 for img_type, img_path in image_paths.items()
             ]
-            
             for future in futures:
                 img_type, result = future.result()
                 results[img_type] = result
-        
-        # Calcular confianza promedio
+
         confidences = [r["confidence"] for r in results.values()]
         avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
-        
-        total_time = time.time() - start_time
-        logger.info(f"✅ OCR paralelo completado en {total_time:.2f}s (vs ~{len(image_paths)*15}s secuencial)")
-        
+
+        logger.info(f"✅ OCR paralelo completado en {time.time()-start_time:.2f}s | Conf promedio={avg_confidence:.2f}")
+
         return {
             "images": results,
-            "overall_confidence": float(avg_confidence)
+            "overall_confidence": avg_confidence
         }
 
 # Instancia global

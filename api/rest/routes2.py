@@ -198,3 +198,9 @@ def restore_version(request: RestoreRequest):
         return {'message': f'Restored version {run_id}', 'count': len(sift_engine.database)}
     except Exception as e:
         return JSONResponse(status_code=500, content={'error': str(e)})
+    
+    
+    
+    
+    
+    

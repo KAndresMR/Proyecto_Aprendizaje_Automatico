@@ -117,7 +117,7 @@ if __name__ == "__main__":
     _ = parser.add_argument(
         "--port",
         type=int,
-        default=5000,
+        default=5001,
         help="Port to run business backend on (default: 9000)",
     )
     _ = parser.add_argument(
