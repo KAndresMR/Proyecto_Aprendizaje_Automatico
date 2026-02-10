@@ -1,13 +1,13 @@
 import logging
+
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from app.config import settings
-from app.database import engine, Base
-from app.routes import inventory
-from fastapi.middleware.cors import CORSMiddleware
 
-
+from backend.app.core.config import settings
+from backend.app.core.database import engine, Base
+from backend.app.api import inventory
 
 # --------------------------------------------------
 # Logging
@@ -19,13 +19,26 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # --------------------------------------------------
+# Lifespan (startup / shutdown)
+# --------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Ciclo de vida de la app"""
+    # Startup
+    Base.metadata.create_all(bind=engine)
+    logger.info("✅ Tablas de base de datos creadas")
+    yield
+    # Shutdown
+    logger.info("🛑 Aplicación detenida")
+
+# --------------------------------------------------
 # App
 # --------------------------------------------------
 app = FastAPI(
-    title="Sistema de Gestión de Inventario",
-    description="API para registro automático de productos con OCR",
+    title="Agente de Inventario IA",
     version="1.0.0",
-    debug=settings.DEBUG
+    #debug=settings.DEBUG,
+    lifespan=lifespan
 )
 
 # --------------------------------------------------
@@ -33,27 +46,10 @@ app = FastAPI(
 # --------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 🔹 Temporalmente permitir todo
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-)
-
-# --------------------------------------------------
-# Startup
-# --------------------------------------------------
-@app.on_event("startup")
-def on_startup():
-    Base.metadata.create_all(bind=engine)
-    logger.info("✅ Tablas de base de datos creadas/verificadas")
-
-# --------------------------------------------------
-# Static files
-# --------------------------------------------------
-app.mount(
-    "/uploads",
-    StaticFiles(directory=settings.UPLOAD_DIR),
-    name="uploads"
 )
 
 # --------------------------------------------------
@@ -66,12 +62,4 @@ app.include_router(inventory.router)
 # --------------------------------------------------
 @app.get("/")
 async def root():
-    return {
-        "message": "Sistema de Gestión de Inventario API",
-        "version": "1.0.0",
-        "status": "running",
-    }
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
+    return {"status": "ok", "service": "Agente Inventario IA"}

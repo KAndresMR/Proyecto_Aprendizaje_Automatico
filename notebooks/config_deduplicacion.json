@@ -1,0 +1,10 @@
+{
+  "umbral_recomendado": 0.85,
+  "pesos": {
+    "nombre": 0.5,
+    "marca": 0.3,
+    "tamano": 0.2
+  },
+  "optimizacion": "filtro_por_marca",
+  "mejora_velocidad": "0.9x"
+}

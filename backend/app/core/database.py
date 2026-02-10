@@ -7,7 +7,7 @@ DATABASE_URL = "postgresql+asyncpg://postgres:admin123@localhost:5432/inventario
 
 # 🔹 Engine SYNC (solo migraciones / create_all)
 SYNC_DATABASE_URL = DATABASE_URL.replace("+asyncpg", "")
-engine = create_engine(SYNC_DATABASE_URL, echo=True)
+engine = create_engine(SYNC_DATABASE_URL, echo=False)
 
 # 🔹 Engine ASYNC (FastAPI)
 async_engine = create_async_engine(DATABASE_URL, echo=True)

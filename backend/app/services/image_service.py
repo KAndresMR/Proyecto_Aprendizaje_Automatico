@@ -1,61 +1,64 @@
 import os
 import shutil
-from typing import List
+import logging
+import asyncio
+
+from typing import List, Dict
 from fastapi import UploadFile
 from datetime import datetime
-from app.config import settings
-import logging
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
 
 logger = logging.getLogger(__name__)
 
 class ImageService:
-    def __init__(self):
-        self.upload_dir = settings.UPLOAD_DIR
-        self._ensure_upload_dir()
-    
-    def _ensure_upload_dir(self):
-        """Crear directorio de uploads si no existe"""
-        os.makedirs(self.upload_dir, exist_ok=True)
-        logger.info(f"📁 Directorio de uploads: {self.upload_dir}")
+    def __init__(self, upload_dir: str = "uploads"):
+        base_dir = Path(__file__).resolve().parent.parent.parent
+        self.upload_dir = base_dir / upload_dir
+        self.upload_dir.mkdir(parents=True, exist_ok=True)
     
     def save_image(self, file: UploadFile, image_type: str) -> str:
-        """Guardar imagen y retornar la ruta"""
+        """Guardar UNA imagen"""
         try:
-            # Generar nombre único
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"{image_type}_{timestamp}_{file.filename}"
-            file_path = os.path.join(self.upload_dir, filename)
+            file_path = self.upload_dir / filename
             
-            # Guardar archivo
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
             
-            logger.info(f"✅ Imagen guardada: {file_path}")
-            return file_path
+            logger.info(f"💾 Guardada: {filename}")
+            return str(file_path)
             
         except Exception as e:
-            logger.error(f"❌ Error guardando imagen: {e}")
+            logger.error(f"❌ Error guardando {image_type}: {e}")
             raise
     
-    def save_multiple_images(self, files: List[UploadFile], image_types: List[str]) -> dict:
-        """Guardar múltiples imágenes"""
-        saved_images = {}
+    async def save_multiple_images_async(
+        self, 
+        files: List[UploadFile], 
+        image_types: List[str]
+    ) -> Dict[str, str]:
+        """Guardar múltiples imágenes EN PARALELO"""
+        loop = asyncio.get_event_loop()
         
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            tasks = [
+                loop.run_in_executor(executor, self.save_image, file, img_type)
+                for file, img_type in zip(files, image_types)
+                if file
+            ]
+            
+            saved_paths = await asyncio.gather(*tasks)
+        
+        # Construir diccionario
+        saved_images = {}
+        idx = 0
         for file, img_type in zip(files, image_types):
             if file:
-                file_path = self.save_image(file, img_type)
-                saved_images[img_type] = file_path
+                saved_images[img_type] = saved_paths[idx]
+                idx += 1
         
+        logger.info(f"💾 {len(saved_images)} imágenes guardadas en paralelo")
         return saved_images
-    
-    def delete_image(self, file_path: str):
-        """Eliminar imagen del sistema"""
-        try:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-                logger.info(f"🗑️ Imagen eliminada: {file_path}")
-        except Exception as e:
-            logger.error(f"❌ Error eliminando imagen: {e}")
-
-# Instancia global
-image_service = ImageService()

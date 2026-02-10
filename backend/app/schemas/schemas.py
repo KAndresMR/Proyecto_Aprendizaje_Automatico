@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import date, datetime
 
 # ========================================
@@ -83,18 +83,19 @@ class OCRProduct(BaseModel):
 
 
 class OCRResult(BaseModel):
-    raw_text: dict
+    raw_text: Dict
     confidence: float
-    product: OCRProduct
+    product: Dict
     missing_fields: List[str]
     duplicates: List[dict]
-
+    is_duplicate: bool = False
+    class Config:
+        from_attributes = True
 
 class ProcessingStatus(BaseModel):
     status: str
     message: str
     progress: int
-
 
 # ========================================
 # SAVE PRODUCT RESPONSE

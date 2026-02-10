@@ -165,6 +165,3 @@ class NormalizerService:
             logger.error(f"❌ Error extrayendo información: {e}")
         
         return product_info
-
-# Instancia global
-normalizer_service = NormalizerService()

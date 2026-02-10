@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Text, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from app.database import Base
+from backend.app.core.database import Base
 
 class Product(Base):
     __tablename__ = "products"
@@ -16,6 +16,11 @@ class Product(Base):
     barcode = Column(String(50), unique=True, index=True)
     description = Column(Text)
     
+    # Rutas de imágenes
+    image_front = Column(String, nullable=True)
+    image_left = Column(String, nullable=True)
+    image_right = Column(String, nullable=True)
+    
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -23,7 +28,6 @@ class Product(Base):
     
     # Relaciones
     batches = relationship("ProductBatch", back_populates="product")
-    images = relationship("ProductImage", back_populates="product")
 
 
 class ProductBatch(Base):
@@ -44,27 +48,6 @@ class ProductBatch(Base):
     
     # Relaciones
     product = relationship("Product", back_populates="batches")
-
-
-class ProductImage(Base):
-    __tablename__ = "product_images"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
-    
-    image_type = Column(String(50))  # front, left, right, back, nutrition
-    image_path = Column(String(500), nullable=False)
-    image_url = Column(String(500))
-    
-    # OCR Data
-    extracted_text = Column(Text)
-    ocr_confidence = Column(Float)
-    
-    # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    # Relaciones
-    product = relationship("Product", back_populates="images")
 
 
 class OCRLog(Base):
