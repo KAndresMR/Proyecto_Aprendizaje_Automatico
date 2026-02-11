@@ -3,9 +3,6 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-
-from backend.app.core.config import settings
 from backend.app.core.database import engine, Base
 from backend.app.api import inventory
 
@@ -63,3 +60,8 @@ app.include_router(inventory.router)
 @app.get("/")
 async def root():
     return {"status": "ok", "service": "Agente Inventario IA"}
+
+
+from fastapi.staticfiles import StaticFiles
+
+app.mount("/", StaticFiles(directory="frontend", html=True), name="static")
