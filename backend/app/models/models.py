@@ -29,7 +29,6 @@ class Product(Base):
     # Relaciones
     batches = relationship("ProductBatch", back_populates="product")
 
-
 class ProductBatch(Base):
     __tablename__ = "product_batches"
     

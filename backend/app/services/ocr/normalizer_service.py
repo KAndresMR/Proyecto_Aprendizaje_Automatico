@@ -1,7 +1,8 @@
 import re
+import logging
+
 from typing import Dict, Tuple, Optional
 from datetime import datetime
-import logging
 
 logger = logging.getLogger(__name__)
 

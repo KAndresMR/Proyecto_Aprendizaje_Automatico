@@ -228,7 +228,12 @@ async function processProduct(e) {
         updateProgress(92, 'Procesando respuesta del servidor...');
         const data = await response.json();
 
-        console.log("✅ BACKEND OCR RESULT:", data);
+        console.log("🔎 RAW BACKEND DATA:");
+        console.log(JSON.stringify(data, null, 2));
+        console.log("🔎 data.product:", data.product);
+        console.log("🔎 data.images:", data.images);
+        console.log("🔎 data.confidence:", data.confidence);
+        console.log("🔎 data.overall_confidence:", data.overall_confidence);
 
         updateProgress(95, 'Validando información extraída...');
         await delay(300);
@@ -379,8 +384,8 @@ function showForm(data) {
     const confidencePercent = Math.round(data.confidence * 100);
     addAgentMessage(
         `<p>✅ <strong>Análisis completado con ${confidencePercent}% de confianza.</strong></p>
-         <p>He extraído la información del producto. Por favor, verifica los datos y completa los campos faltantes si es necesario.</p>
-         <p>Cuando estés listo, haz clic en <strong>"Guardar Producto"</strong> en el formulario.</p>`
+        <p>He extraído la información del producto. Por favor, verifica los datos y completa los campos faltantes si es necesario.</p>
+        <p>Cuando estés listo, haz clic en <strong>"Guardar Producto"</strong> en el formulario.</p>`
     );
 }
 
@@ -436,12 +441,13 @@ async function saveProduct(e) {
         
         addAgentMessage(
             `<p>✅ <strong>¡Producto guardado exitosamente!</strong></p>
-             <p><strong>"${result.product?.name || 'Producto'}"</strong> ha sido registrado en la base de datos con ID: <strong>${result.id}</strong></p>
-             <p>¿Deseas registrar otro producto?</p>`,
+            <p><strong>"${result.product?.name || 'Producto'}"</strong> ha sido registrado en la base de datos con ID: <strong>${result.id}</strong></p>
+            <p>¿Deseas registrar otro producto?</p>`,
             [{ text: 'Registrar Otro Producto', icon: '➕', onclick: 'resetAll()', type: 'primary' }]
         );
         
         updateSessionStatus('Completado');
+        playVoiceConfirmation(result.product?.name || 'Producto');
 
     } catch (error) {
         console.error('❌ Error al guardar:', error);
@@ -754,4 +760,30 @@ function translateFieldName(field) {
         'price': 'Precio'
     };
     return translations[field] || field;
+}
+
+async function playVoiceConfirmation(productName) {
+    try {
+        const response = await fetch(`${CONFIG.API_URL}/inventory/voice/confirm`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ product_name: productName })
+        });
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const audioUrl = URL.createObjectURL(blob);
+            const audio = document.getElementById('confirmationAudio');
+            audio.src = audioUrl;
+            
+            // Reproducir audio
+            await audio.play();
+            
+            console.log('🎤 Audio de confirmación reproducido');
+        } else {
+            console.warn('⚠️ Servicio de voz no disponible');
+        }
+    } catch (error) {
+        console.log('⚠️ Voz no disponible:', error);
+    }
 }

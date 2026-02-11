@@ -16,78 +16,87 @@ class OCRService:
         self.engine = "EasyOCR"
     
     def preprocess_image_smart(self, image_path: str, img_type: str = "front") -> np.ndarray:
-        """Preprocesamiento adaptativo"""
-        # FRONTAL: CLAHE + Denoise
-        # LATERAL: Sharpen + Adaptive Threshold
-        
+        """Preprocesamiento MÁS SUAVE"""
         img = cv2.imread(image_path)
         if img is None:
-            logger.error(f"No se pudo leer la imagen: {image_path}")
+            logger.error(f"No se pudo leer: {image_path}")
             return None
         
-        # Redimensionar
+        # 1. Redimensionar moderadamente
         height, width = img.shape[:2]
-        target_width = 1200 if img_type == "front" else 1400
+        max_dim = 1600  # Más conservador
         
-        if width > target_width:
-            scale = target_width / width
-            img = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+        if max(height, width) > max_dim:
+            scale = max_dim / max(height, width)
+            img = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_LANCZOS4)
         
+        # 2. Convertir a escala de grises
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         
-        # Procesamiento específico
-        if img_type == "front":
-            # ✅ FRONTAL: CLAHE + Denoise
-            clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
-            enhanced = clahe.apply(gray)
-            
-            denoised = cv2.fastNlMeansDenoising(enhanced, h=10)
-            return denoised
-        else:
-            # ✅ LATERALES: Sharpen + CLAHE + Otsu
-            kernel_sharpen = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
-            sharpened = cv2.filter2D(gray, -1, kernel_sharpen)
-            clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-            enhanced = clahe.apply(sharpened)
-            _, binary = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            
-            return binary
+        # 3. SOLO CLAHE suave (no binarizar)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        enhanced = clahe.apply(gray)
+        
+        # 4. Denoise MUY suave
+        denoised = cv2.fastNlMeansDenoising(enhanced, h=7)
+        
+        return denoised  # ← RETORNAR GRAYSCALE, NO BINARIO
 
     def _extract_single_image(self, img_type: str, img_path: str) -> Tuple[str, Dict]:
-        """OCR de Una imagen"""
-        # 1. Preprocesar
-        # 2. EasyOCR readtext
-        # 3. Retornar texto + confianza
+        """OCR de una imagen con preprocesamiento suave"""
         
-        # Preprocesar según tipo
-        optimal_variant = self.preprocess_image_smart(img_path, img_type)
-        
-        if optimal_variant is None:
+        # Leer imagen original (sin preprocesar primero)
+        img = cv2.imread(img_path)
+        if img is None:
+            logger.error(f"No se pudo leer: {img_path}")
             return img_type, {"text": "", "confidence": 0.0}
         
+        # Redimensionar moderadamente
+        height, width = img.shape[:2]
+        max_dim = 1600
+        if max(height, width) > max_dim:
+            scale = max_dim / max(height, width)
+            img = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_LANCZOS4)
+        
+        # Convertir a grayscale
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        
+        # CLAHE suave
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        enhanced = clahe.apply(gray)
+        
         try:
-            # OCR con EasyOCR
-            results = self.reader.readtext(optimal_variant, detail=1, paragraph=True)
+            # ✅ CAMBIO CRÍTICO: paragraph=False
+            results = self.reader.readtext(
+                enhanced, 
+                detail=1, 
+                paragraph=False  # ← CAMBIAR AQUÍ
+            )
+            
+            logger.debug(f"EasyOCR detectó {len(results)} elementos en {img_type}")
             
             all_text = []
             confidences = []
             
             for item in results:
-                if isinstance(item, (list, tuple)) and len(item) >= 2:
-                    text = item[1] if len(item) > 1 else ""
-                    conf = float(item[2]) if len(item) > 2 else 0.0
+                if isinstance(item, (list, tuple)) and len(item) >= 3:
+                    bbox, text, conf = item[0], item[1], item[2]
                     
-                    if isinstance(text, list):
-                        text = " ".join(text)
+                    conf = float(conf)
+                    logger.debug(f"  '{text[:30]}...' conf={conf:.2f}")
                     
                     if text.strip():
-                        all_text.append(text)
+                        all_text.append(text.strip())
                         confidences.append(conf)
             
             full_text = " ".join(all_text)
             avg_conf = sum(confidences) / len(confidences) if confidences else 0.0
             
             logger.info(f"✅ OCR {img_type}: {len(all_text)} textos, conf={avg_conf:.2f}")
+            
+            if avg_conf == 0.0 and all_text:
+                logger.warning(f"⚠️ Confianza 0 pero hay texto! Forzando 0.5")
+                avg_conf = 0.5
             
             return img_type, {
                 "text": full_text,

@@ -54,48 +54,21 @@ class BatchResponse(BatchBase):
     
     model_config = ConfigDict(from_attributes=True)
 
-
-# ========================================
-# IMAGE SCHEMAS
-# ========================================
-class ImageResponse(BaseModel):
-    id: int
-    image_type: str
-    image_url: Optional[str] = None
-    ocr_confidence: Optional[float] = None
-    created_at: datetime
-    
-    model_config = ConfigDict(from_attributes=True)
-
-
 # ========================================
 # OCR RESPONSE SCHEMAS
 # ========================================
-class OCRProduct(BaseModel):
-    name: Optional[str] = None
-    brand: Optional[str] = None
-    presentation: Optional[str] = None
-    size: Optional[str] = None
-    barcode: Optional[str] = None
-    batch: Optional[str] = None
-    expiry_date: Optional[str] = None
-    price: Optional[float] = None
 
 
 class OCRResult(BaseModel):
-    raw_text: Dict
-    confidence: float
+    confidence: float 
     product: Dict
+    ocr_raw: Dict[str, str] 
     missing_fields: List[str]
-    duplicates: List[dict]
+    duplicates: List[Dict]
     is_duplicate: bool = False
+    
     class Config:
         from_attributes = True
-
-class ProcessingStatus(BaseModel):
-    status: str
-    message: str
-    progress: int
 
 # ========================================
 # SAVE PRODUCT RESPONSE

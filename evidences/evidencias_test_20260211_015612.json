@@ -1,0 +1,22 @@
+{
+  "fecha": "2026-02-11T01:56:12.015096",
+  "tests_ejecutados": 6,
+  "tests_exitosos": 3,
+  "tests_fallidos": 3,
+  "detalles": {
+    "vector_db": false,
+    "langchain": false,
+    "ocr": false,
+    "database": true,
+    "api": true,
+    "integration": true
+  },
+  "componentes": {
+    "ChromaDB": "❌ Error",
+    "LangChain": "❌ Error",
+    "OCR": "❌ Error",
+    "PostgreSQL": "✅ Funcionando",
+    "API": "✅ Funcionando",
+    "Integración": "✅ Funcionando"
+  }
+}
