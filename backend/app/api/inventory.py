@@ -75,17 +75,22 @@ async def process_images_from_camera(
         # Opción 1: Usar Gemini (si falla → Mock)
         # Opción 2: Usar Llama (si falla → Mock)
         logger.info("🤖 Extrayendo información con IA...")
+        logger.info(
+            f"[AI] ▶ Iniciando extracción async | strategy=llama "
+            f"| ocr_conf={ocr_data.get('overall_confidence', 'N/A')}"
+        )
         start = time.time()
         product_info = await asyncio.to_thread(
             ai_extractor_service.extract_product_info,
             ocr_data,
             strategy = 'llama' ,
         )
-        
+        elapsed = time.time() - start
         logger.info(
-            "📦 Product Info Extracted:\n" +
-            json.dumps(product_info, indent=2, ensure_ascii=False)
-        )
+            f"[AI] ✅ Extracción completada | strategy=llama "
+            f"| tiempo_total={elapsed:.3f}s "
+            f"| completeness={product_info.get('_completeness', 'N/A')}"
+        )   
         
         logger.info(f"⏱️ IA Extracción: {time.time()-start:.2f}s")
         

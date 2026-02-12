@@ -1,6 +1,7 @@
 import logging
 import json
 import re
+import time
 
 from typing import Dict, Union
 from google import genai
@@ -59,6 +60,8 @@ class AIExtractorService:
         Returns:
             Dict con información del producto extraída
         """
+        service_start = time.time()
+        logger.info(f"[AI] ▶ extract_product_info | strategy={strategy}")
         # Blindaje contra JSON serializado
         if isinstance(ocr_data, str):
             try:
@@ -66,9 +69,12 @@ class AIExtractorService:
             except Exception:
                 logger.error("OCR data no es JSON válido")
                 return self._empty_product_info()
-
+        logger.debug(f"[AI] OCR type={type(ocr_data).__name__}")
         all_text = self._combine_ocr_text(ocr_data)
-
+        logger.info(
+            f"[AI] OCR combinado | length={len(all_text)} "
+            f"| overall_conf={ocr_data.get('overall_confidence', 'N/A')}"
+        )
         if not all_text.strip():
             logger.info("⚠️ OCR vacío, retornando estructura vacía")
             return self._empty_product_info()
@@ -335,10 +341,15 @@ REGLAS:
         """Extracción con Llama (local o API)"""
         if not llama_client or not llama_client.llm:
             raise ServiceUnavailable("Llama no está disponible")
-        logger.debug(f"Lo que nos llega:\n{text[:500]}")
+        logger.info(
+            f"[LLAMA] ▶ Inicio extracción | text_length={len(text)}"
+        )
+        llama_start = time.time()
         try:
             result = llama_client.extract(text)
-            
+            llama_elapsed = time.time() - llama_start
+            logger.info(f"[LLAMA] Respuesta recibida | tiempo={llama_elapsed:.3f}s")
+
             # Validar estructura completa
             required_keys = [
                 "name", "brand", "presentation", "size", "barcode",
@@ -347,6 +358,13 @@ REGLAS:
             
             if not all(key in result for key in required_keys):
                 raise ValueError("Estructura incompleta de Llama")
+            non_null_fields = sum(
+                1 for k, v in result.items()
+                if v and k != "nutritional_info"
+            )
+            logger.info(
+                f"[LLAMA] ✅ Validación OK | campos_no_nulos={non_null_fields}/9"
+            )
             
             return result
             

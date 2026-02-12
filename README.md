@@ -11,6 +11,7 @@
 
 [📹 Video Demo](#-video-de-demostración) • [🚀 Inicio Rápido](#-instalación-y-configuración) • [📊 Métricas](#-métricas-de-calidad) • [📝 Documentación](#-estructura-del-proyecto)
 
+
 </div>
 
 ---
@@ -35,6 +36,10 @@
 ---
 
 ## 🎯 Resumen
+
+**Link del github**: https://github.com/KAndresMR/Proyecto_Aprendizaje_Automatico/commits/main/
+**Link del video**: https://www.youtube.com/watch?v=uAhBtAsfywg
+
 
 **Agente de Gestión de Inventario con IA** es un sistema automatizado que permite registrar productos mediante la captura de fotografías, extrayendo automáticamente información como:
 
