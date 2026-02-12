@@ -18,7 +18,6 @@ class ImageService:
         self.upload_dir.mkdir(parents=True, exist_ok=True)
     
     def save_image(self, file: UploadFile, image_type: str) -> str:
-        """Guardar UNA imagen"""
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"{image_type}_{timestamp}_{file.filename}"
@@ -39,7 +38,6 @@ class ImageService:
         files: List[UploadFile], 
         image_types: List[str]
     ) -> Dict[str, str]:
-        """Guardar múltiples imágenes EN PARALELO"""
         loop = asyncio.get_event_loop()
         
         with ThreadPoolExecutor(max_workers=4) as executor:

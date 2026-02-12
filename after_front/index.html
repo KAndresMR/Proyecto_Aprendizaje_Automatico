@@ -34,26 +34,12 @@
                         <span class="stat-value stat-status" id="sessionStatus">Listo</span>
                     </div>
                 </div>
-
-                <!-- OPCIONES RÁPIDAS -->
-                <div class="quick-actions">
-                    <h4 class="quick-actions-title">Acciones Rápidas</h4>
-                    <button class="quick-action-btn" onclick="sendQuickQuery('¿Cuántos productos hay en total?')">
-                        📊 Ver Total
-                    </button>
-                    <button class="quick-action-btn" onclick="sendQuickQuery('Muéstrame los últimos 5 productos')">
-                        📦 Últimos Productos
-                    </button>
-                    <button class="quick-action-btn" onclick="sendQuickQuery('¿Qué productos están por vencer?')">
-                        ⚠️ Por Vencer
-                    </button>
-                </div>
             </div>
             
             <div class="sidebar-footer">
                 <div class="footer-info">
                     <small>Agente de Gestión de Inventario</small>
-                    <small class="footer-version">v2.0 • Chat IA</small>
+                    <small class="footer-version">v1.0</small>
                 </div>
             </div>
         </div>
@@ -64,7 +50,7 @@
             <!-- CHAT INTERFACE -->
             <div id="chatInterface" class="chat-interface active">
                 <div class="chat-header">
-                    <h1>🔦 Registro de Productos</h1>
+                    <h1>📦 Registro de Productos</h1>
                     <p class="chat-subtitle">Asistente inteligente con OCR y análisis automático</p>
                 </div>
 
@@ -74,51 +60,35 @@
                         <div class="message-avatar">🤖</div>
                         <div class="message-content">
                             <div class="message-text">
-                                <p>¡Hola! Soy tu asistente de inventario con IA.</p>
-                                <p>Puedo ayudarte de dos formas:</p>
+                                <p>¡Hola! Soy tu asistente de inventario.</p>
+                                <p>Puedo ayudarte a registrar productos usando la cámara. Extraeré información como nombre, marca, tamaño, código de barras y más.</p>
+                                <p><strong>¿Comenzamos?</strong> Toma 3 fotos del producto:</p>
                                 <ul>
-                                    <li>📸 <strong>Registrar productos</strong> - Toma 3 fotos y extraeré toda la información</li>
-                                    <li>💬 <strong>Consultar inventario</strong> - Pregúntame lo que necesites</li>
-                                </ul>
-                                <p><strong>Ejemplos de consultas:</strong></p>
-                                <ul>
-                                    <li>• "¿Cuántos productos hay?"</li>
-                                    <li>• "Busca Coca Cola"</li>
-                                    <li>• "Muéstrame productos de Gloria"</li>
-                                    <li>• "¿Qué productos vencen pronto?"</li>
+                                    <li>📸 <strong>Frontal</strong> - Nombre y marca</li>
+                                    <li>📸 <strong>Lateral izquierdo</strong> - Ingredientes</li>
+                                    <li>📸 <strong>Lateral derecho</strong> - Información nutricional</li>
                                 </ul>
                             </div>
                             <div class="message-actions">
                                 <button class="action-btn primary" id="startCameraBtn" type="button">
                                     <span>📷</span>
-                                    Registrar Producto
+                                    Iniciar Cámara
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- INPUT DE CHAT -->
                 <div class="chat-input-container">
                     <div class="photos-preview" id="photosPreview"></div>
                     
                     <div class="chat-input-wrapper">
-                        <button class="camera-toggle-btn" id="cameraToggleBtn" type="button" title="Capturar fotos">
+                        <button class="camera-toggle-btn" id="cameraToggleBtn" type="button">
                             <span>📷</span>
                         </button>
-                        
-                        <form id="chatForm" class="chat-form">
-                            <input 
-                                type="text" 
-                                id="chatInput" 
-                                class="chat-input" 
-                                placeholder="Escribe tu consulta o registra un producto..."
-                                autocomplete="off"
-                            />
-                            <button type="submit" class="send-btn" title="Enviar">
-                                <span>📤</span>
-                            </button>
-                        </form>
+                        <div class="input-status" id="inputStatus">
+                            Listo para capturar fotos
+                        </div>
                     </div>
                 </div>
             </div>

@@ -13,19 +13,27 @@ class DeduplicatorService:
         self.SIMILARITY_THRESHOLD = threshold
     
     async def find_similar_products(
-        self, 
-        db: AsyncSession, 
-        name: str, 
-        brand: str, 
-        barcode: Optional[str] = None,
-        size: str = ""
-    ) -> List[Dict]:
-        """Buscar duplicados"""
-        # 1. Match por barcode (exacto)
-        # 2. Filtrar por marca en DB
-        # 3. Fuzzy matching solo con candidatos
+    self, 
+    db: AsyncSession, 
+    name: str, 
+    brand: str, 
+    barcode: Optional[str] = None,
+    size: str = ""
+) -> List[Dict]:
+        """
+        Buscar duplicados con criterios claros:
+        
+        DUPLICADO = mismo producto físico
+        - Barcode exacto = 100% duplicado
+        - Marca + Nombre similar + Tamaño EXACTO = duplicado probable
+        
+        NO DUPLICADO = mismo producto, diferente presentación
+        - Marca + Nombre similar + Tamaño DIFERENTE = producto relacionado
+        """
         try:
-            # ESTRATEGIA 1: Buscar por barcode (MÁS RÁPIDO)
+            # ============================================
+            # ESTRATEGIA 1: BARCODE EXACTO = 100% MATCH
+            # ============================================
             if barcode and len(barcode) >= 8:
                 logger.info(f"🔍 Buscando por barcode: {barcode}")
                 
@@ -37,30 +45,35 @@ class DeduplicatorService:
                 product = result.scalar_one_or_none()
                 
                 if product:
-                    logger.info(f"✅ Match exacto por barcode: {product.name}")
+                    logger.info(f"✅ Match EXACTO por barcode: {product.name}")
                     return [{
                         "id": product.id,
                         "name": product.name,
                         "brand": product.brand,
                         "size": product.size,
                         "barcode": product.barcode,
-                        "similarity": 1.0
+                        "similarity": 1.0,
+                        "match_type": "barcode",
+                        "is_exact_match": True
                     }]
-            # 🔹 ESTRATEGIA 2: Buscar por marca + nombre
+            
+            # ============================================
+            # ESTRATEGIA 2: MARCA + NOMBRE (FUZZY)
+            # ============================================
             if not brand or not name:
                 logger.warning("No hay marca/nombre para búsqueda fuzzy")
                 return []
             
-            logger.info(f"🔍 Buscando por marca: {brand}")
+            logger.info(f"🔍 Buscando por marca + nombre: '{brand}' - '{name}'")
             
-            # Filtrar por marca en DB (reduce candidatos 90%)
+            # Filtrar por marca en DB (reduce candidatos)
             stmt = (
                 select(Product)
                 .where(
                     Product.is_active == True,
                     Product.brand.ilike(f"%{brand}%")
                 )
-                .limit(50)  # Máximo 50 candidatos
+                .limit(50)
             )
             
             result = await db.execute(stmt)
@@ -75,39 +88,104 @@ class DeduplicatorService:
             similar_products = []
             
             for product in products:
-                # Similitud de nombre
+                # ============================
+                # PASO 1: Similitud de nombre
+                # ============================
                 name_sim = fuzz.ratio(name.lower(), product.name.lower())
                 
-                # Early exit
                 if name_sim < 60:
                     continue
                 
-                # Similitud de marca (debería ser alta ya que filtramos)
+                # ============================
+                # PASO 2: Similitud de marca
+                # ============================
                 brand_sim = fuzz.ratio(brand.lower(), product.brand.lower())
                 
-                # Similitud de tamaño (opcional)
-                size_sim = 0
+                # ============================
+                # PASO 3: TAMAÑO - MATCH EXACTO (NO FUZZY)
+                # ============================
+                size_match = False
+                size_comparison = "unknown"
+                
                 if size and product.size:
-                    size_sim = fuzz.ratio(size.lower(), product.size.lower())
+                    # Normalizar espacios y mayúsculas
+                    size_normalized = size.lower().replace(" ", "").strip()
+                    product_size_normalized = product.size.lower().replace(" ", "").strip()
+                    
+                    # Match exacto
+                    if size_normalized == product_size_normalized:
+                        size_match = True
+                        size_comparison = "exact"
+                    # Muy cercano (ej: "500ml" vs "500 ml" vs "500ML")
+                    elif fuzz.ratio(size_normalized, product_size_normalized) >= 95:
+                        size_match = True
+                        size_comparison = "very_close"
+                    else:
+                        size_comparison = "different"
                 
-                # Promedio ponderado (nombre vale más)
-                avg_sim = (name_sim * 0.5 + brand_sim * 0.3 + size_sim * 0.2)
+                # ============================
+                # PASO 4: CALCULAR SIMILITUD FINAL
+                # ============================
+                # Similitud base (solo nombre + marca)
+                base_similarity = (name_sim * 0.6 + brand_sim * 0.4)
                 
-                if avg_sim >= self.SIMILARITY_THRESHOLD:
+                # ✅ LÓGICA DE CLASIFICACIÓN:
+                match_type = None
+                final_similarity = 0
+                is_exact_match = False
+                
+                if base_similarity >= 75:  # Umbral de similitud base
+                    
+                    if size_match:
+                        # ✅ DUPLICADO: Mismo nombre, marca Y tamaño
+                        final_similarity = base_similarity / 100
+                        match_type = "name_brand_size"
+                        is_exact_match = True
+                        
+                    elif not size or not product.size:
+                        # ⚠️ DUPLICADO PROBABLE: No tenemos info de tamaño
+                        final_similarity = base_similarity / 100
+                        match_type = "name_brand_no_size"
+                        is_exact_match = False
+                        
+                    else:
+                        # ❌ NO DUPLICADO: Mismo producto, diferente presentación
+                        # Ejemplo: "Coca Cola 500ml" vs "Coca Cola 1L"
+                        final_similarity = 0.65  # Por debajo del umbral
+                        match_type = "related_product"
+                        is_exact_match = False
+                    
                     similar_products.append({
                         "id": product.id,
                         "name": product.name,
                         "brand": product.brand,
                         "size": product.size,
                         "barcode": product.barcode,
-                        "similarity": round(avg_sim / 100, 2)
+                        "similarity": round(final_similarity, 2),
+                        "match_type": match_type,
+                        "is_exact_match": is_exact_match,
+                        # Detalles para debugging
+                        "name_similarity": round(name_sim / 100, 2),
+                        "brand_similarity": round(brand_sim / 100, 2),
+                        "size_match": size_match,
+                        "size_comparison": size_comparison
                     })
             
+            # Ordenar por similitud
             similar_products.sort(key=lambda x: x["similarity"], reverse=True)
             
-            logger.info(f"✅ Encontrados {len(similar_products)} duplicados potenciales")
+            if similar_products:
+                logger.info(
+                    f"✅ Encontrados {len(similar_products)} candidatos. "
+                    f"Mejor match: {similar_products[0]['name']} "
+                    f"(similarity: {similar_products[0]['similarity']}, "
+                    f"type: {similar_products[0]['match_type']})"
+                )
+            else:
+                logger.info("No se encontraron duplicados")
             
             return similar_products[:5]  # Top 5
+            
         except Exception as e:
-            logger.error(f"❌ Error buscando duplicados: {e}")
+            logger.exception(f"❌ Error buscando duplicados: {e}")
             return []

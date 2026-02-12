@@ -11,6 +11,7 @@ class Product(Base):
     brand = Column(String(255), nullable=False, index=True)
     presentation = Column(String(100))
     size = Column(String(50), nullable=False)
+    category = Column(String, nullable=True)
     normalized_size_value = Column(Float)  # Valor normalizado en unidad base
     normalized_size_unit = Column(String(10))  # g, ml, etc.
     barcode = Column(String(50), unique=True, index=True)

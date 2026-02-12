@@ -9,19 +9,56 @@ from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable
 
 logger = logging.getLogger(__name__)
 
+
+logging.basicConfig(
+    level=logging.DEBUG, 
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+
+# ========================================
+# IMPORTAR CLIENTES OPCIONALES
+# ========================================
+
 try:
     from .llama_client import llama_client
 except ImportError:
     logger.warning("⚠️ LlamaClient no disponible")
     llama_client = None
 
+try:
+    import openai
+    OPENAI_AVAILABLE = True
+except ImportError:
+    logger.warning("⚠️ OpenAI no disponible. Instala con: pip install openai")
+    OPENAI_AVAILABLE = False
 
 class AIExtractorService:
     
     def __init__(self):
-        self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
-    
-    def extract_product_info(self, ocr_data: Union[Dict, str]) -> Dict:
+        # Cliente Gemini
+        self.gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        
+        # Cliente OpenAI (si está disponible)
+        if OPENAI_AVAILABLE and hasattr(settings, 'OPENAI_API_KEY'):
+            self.openai_client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+        else:
+            self.openai_client = None
+        
+    def extract_product_info(
+        self, 
+        ocr_data: Union[Dict, str],
+        strategy: str = "gemini"
+    ) -> Dict:
+        """
+        Extrae información del producto usando diferentes estrategias de IA.
+        
+        Args:
+            ocr_data: Datos del OCR (dict o JSON string)
+            strategy: "gemini" | "openai" | "llama" | "mock"
+        
+        Returns:
+            Dict con información del producto extraída
+        """
         # Blindaje contra JSON serializado
         if isinstance(ocr_data, str):
             try:
@@ -37,83 +74,291 @@ class AIExtractorService:
             return self._empty_product_info()
 
         try:
-            return self._extract_with_gemini(all_text)
-
-        except (ResourceExhausted, ServiceUnavailable) as e:
-            logger.warning(f"⚠️ Gemini no disponible ({e.__class__.__name__}). Intentando Llama...")
+            logger.info(
+                f"🧾 OCR combinado | length={len(all_text)} "
+                f"| overall_conf={ocr_data.get('overall_confidence', 'N/A')} "
+                f"| strategy={strategy}"
+            )
             
-            # ✅ ARREGLADO: Verificar que llama_client existe
-            if llama_client and llama_client.llm:
-                try:
-                    result = llama_client.extract(all_text)
-                    result["_extracted_with"] = "llama"
-                    return result
-                except Exception as llama_error:
-                    logger.warning(f"⚠️ Llama falló: {llama_error}. Usando mock.")
-                    return self._extract_with_mock(all_text)
+            # ============================================
+            # EJECUTAR LA ESTRATEGIA ELEGIDA
+            # ============================================
+            if strategy == "gemini":
+                result = self._extract_with_gemini(all_text)
+                result["_extracted_with"] = "gemini"
+                
+            elif strategy == "openai":
+                result = self._extract_with_openai(all_text)
+                result["_extracted_with"] = "openai"
+                
+            elif strategy == "llama":
+                result = self._extract_with_llama(all_text)
+                result["_extracted_with"] = "llama"
+                
             else:
-                logger.warning("⚠️ Llama no disponible. Usando mock.")
+                logger.warning(f"⚠️ Estrategia desconocida: '{strategy}'. Usando mock.")
                 return self._extract_with_mock(all_text)
+            
+            # Calcular completitud
+            result["_completeness"] = self._calculate_completeness(result)
+            
+            filled_fields = sum(1 for k, v in result.items() 
+                              if v and k not in ["nutritional_info", "_extracted_with", "_completeness"])
+            logger.info(
+                f"✅ Extraction Success | method={result.get('_extracted_with')} "
+                f"| filled_fields={filled_fields}/9"
+            )
+            
+            return result
 
-        except json.JSONDecodeError:
-            logger.warning("⚠️ Gemini devolvió JSON inválido. Usando mock.")
+        # ============================================
+        # MANEJO DE ERRORES → FALLBACK A MOCK
+        # ============================================
+        except (ResourceExhausted, ServiceUnavailable) as e:
+            logger.warning(
+                f"⚠️ {strategy.upper()} no disponible ({e.__class__.__name__}). "
+                f"Usando mock directamente."
+            )
+            return self._extract_with_mock(all_text)
+
+        except json.JSONDecodeError as e:
+            logger.warning(
+                f"⚠️ {strategy.upper()} devolvió JSON inválido. "
+                f"Usando mock directamente."
+            )
             return self._extract_with_mock(all_text)
 
         except Exception as e:
-            logger.exception(f"❌ Error inesperado: {e}")
+            logger.exception(f"❌ Error inesperado en {strategy}: {e}. Usando mock.")
             return self._extract_with_mock(all_text)
         
+    # ========================================
+    # GEMINI EXTRACTION
+    # ========================================
     def _extract_with_gemini(self, text: str) -> Dict:
+        """
+        Extracción con Google Gemini.
+        
+        MODELOS DISPONIBLES (2024-2026):
+        - gemini-2.0-flash-exp (experimental, rápido)
+        - gemini-1.5-flash (estable, rápido)
+        - gemini-1.5-flash-8b (más rápido, menos capacidad)
+        - gemini-1.5-pro-002 (más potente, más lento)
+        """
+        prompt = f"""
+Eres un experto en análisis de productos de consumo.
+
+Extrae información estructurada de este texto OCR y responde EXCLUSIVAMENTE en JSON válido.
+
+TEXTO OCR:
+El texto puede contener:
+- Nombre del producto
+- Marca
+- Tamaño o contenido neto
+- Código de barras
+- Fecha de vencimiento
+- Precio
+- Categoría
+- Información nutricional
+
+El texto puede estar desordenado por errores de OCR.
+
+{text}
+
+Devuelve EXACTAMENTE esta estructura:
+{{
+  "name": null,
+  "brand": null,
+  "presentation": null,
+  "size": null,
+  "barcode": null,
+  "batch": null,
+  "expiry_date": null,
+  "price": null,
+  "category": null,
+  "nutritional_info": {{
+    "calories": null,
+    "protein": null,
+    "carbs": null,
+    "fat": null,
+    "sodium": null
+  }}
+}}
+
+REGLAS:
+- Corrige errores de OCR
+- Limpia caracteres raros
+- Si no sabes un valor, usa null
+- NO agregues texto fuera del JSON
+- Si detectas múltiples posibles nombres, elige el más representativo
+- No inventes información que no esté presente
+- Para expiry_date usa formato YYYY-MM-DD
+- Para price usa número sin símbolos
+"""
+        
+        try:
+            response = self.gemini_client.models.generate_content(
+                model="gemini-2.0-flash-exp",
+                contents=prompt,
+                config={
+                    "temperature": 0,
+                    "response_mime_type": "application/json"
+                }
+            )
+            
+            if not response.text:
+                raise ValueError("Respuesta vacía de Gemini")
+            
+            data = json.loads(response.text.strip())
+
+            # Validar estructura completa
+            required_keys = [
+                "name", "brand", "presentation", "size", "barcode",
+                "batch", "expiry_date", "price", "category", "nutritional_info"
+            ]
+
+            if not all(key in data for key in required_keys):
+                raise ValueError("Estructura incompleta de Gemini")
+
+            return data
+            
+        except Exception as e:
+            logger.error(f"Error en Gemini: {e}")
+            raise
+    
+    # ========================================
+    # OPENAI/CHATGPT EXTRACTION
+    # ========================================
+    def _extract_with_openai(self, text: str) -> Dict:
+        """
+        Extracción con OpenAI ChatGPT.
+        
+        MODELOS DISPONIBLES:
+        - gpt-4o (recomendado, más preciso)
+        - gpt-4o-mini (más rápido, más barato)
+        - gpt-4-turbo (anterior generación)
+        - gpt-3.5-turbo (más barato, menos preciso)
+        """
+        if not self.openai_client:
+            raise ServiceUnavailable("OpenAI no está configurado")
         
         prompt = f"""
-            Eres un experto en análisis de productos de consumo.
+Eres un experto en análisis de productos de consumo.
 
-            Extrae información estructurada de este texto OCR y responde
-            EXCLUSIVAMENTE en JSON válido.
+Extrae información estructurada de este texto OCR y responde EXCLUSIVAMENTE en JSON válido.
 
-            TEXTO OCR:
-            {text}
+TEXTO OCR:
+{text}
 
-            Devuelve EXACTAMENTE esta estructura:
-            {{
-            "name": null,
-            "brand": null,
-            "presentation": null,
-            "size": null,
-            "barcode": null,
-            "batch": null,
-            "expiry_date": null,
-            "price": null,
-            "category": null,
-            "nutritional_info": {{
-                "calories": null,
-                "protein": null,
-                "carbs": null,
-                "fat": null,
-                "sodium": null
-            }}
-            }}
+Devuelve EXACTAMENTE esta estructura JSON (sin markdown, sin backticks):
+{{
+  "name": null,
+  "brand": null,
+  "presentation": null,
+  "size": null,
+  "barcode": null,
+  "batch": null,
+  "expiry_date": null,
+  "price": null,
+  "category": null,
+  "nutritional_info": {{
+    "calories": null,
+    "protein": null,
+    "carbs": null,
+    "fat": null,
+    "sodium": null
+  }}
+}}
 
-            REGLAS:
-            - Corrige errores de OCR
-            - Limpia caracteres raros
-            - Si no sabes un valor, usa null
-            - NO agregues texto fuera del JSON
-            """
-        response = self.client.models.generate_content(
-            model="gemini-2.0-flash", # o gemini-2.0-flash
-            contents=prompt,
-            config={
-                "temperature": 0,
-                "response_mime_type": "application/json"
-            }
-        )
-        if not response.text:
-            raise ValueError("Respuesta vacía de Gemini")
-        return json.loads(response.text.strip())
+REGLAS:
+- Corrige errores de OCR
+- Si no sabes un valor, usa null
+- NO agregues texto fuera del JSON
+- Para expiry_date usa formato YYYY-MM-DD
+- Para price usa número sin símbolos
+- Responde SOLO con JSON, sin explicaciones
+"""
+        
+        try:
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",  # Puedes cambiar a "gpt-4o" para mejor calidad
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Eres un asistente que extrae datos de productos. Respondes SOLO con JSON válido, sin texto adicional."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0,
+                response_format={"type": "json_object"}  # Forzar JSON válido
+            )
+            
+            content = response.choices[0].message.content
+            
+            if not content:
+                raise ValueError("Respuesta vacía de OpenAI")
+            
+            # Limpiar posibles markdown backticks
+            content = content.strip()
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.startswith("```"):
+                content = content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+            
+            data = json.loads(content)
+
+            # Validar estructura completa
+            required_keys = [
+                "name", "brand", "presentation", "size", "barcode",
+                "batch", "expiry_date", "price", "category", "nutritional_info"
+            ]
+
+            if not all(key in data for key in required_keys):
+                raise ValueError("Estructura incompleta de OpenAI")
+
+            return data
+            
+        except Exception as e:
+            logger.error(f"Error en OpenAI: {e}")
+            raise
     
+    # ========================================
+    # LLAMA EXTRACTION
+    # ========================================
+    def _extract_with_llama(self, text: str) -> Dict:
+        """Extracción con Llama (local o API)"""
+        if not llama_client or not llama_client.llm:
+            raise ServiceUnavailable("Llama no está disponible")
+        logger.debug(f"Lo que nos llega:\n{text[:500]}")
+        try:
+            result = llama_client.extract(text)
+            
+            # Validar estructura completa
+            required_keys = [
+                "name", "brand", "presentation", "size", "barcode",
+                "batch", "expiry_date", "price", "category", "nutritional_info"
+            ]
+            
+            if not all(key in result for key in required_keys):
+                raise ValueError("Estructura incompleta de Llama")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error en Llama: {e}")
+            raise
+    
+    # ========================================
+    # MOCK EXTRACTION (REGEX FALLBACK)
+    # ========================================
     def _extract_with_mock(self, text: str) -> Dict:
-        """Extracción mejorada con NLP básico"""
+        """Extracción con regex (fallback cuando las IAs fallan)"""
         product = self._empty_product_info()
         product["_extracted_with"] = "mock"
         
@@ -231,7 +476,6 @@ class AIExtractorService:
         
         if product_lines:
             best_name = min(product_lines, key=len)
-            # ✅ ARREGLADO: Escapar correctamente caracteres especiales
             best_name = re.sub(r'[^\w\sáéíóúñÁÉÍÓÚÑ-]', '', best_name)
             product["name"] = best_name[:80].strip()
         elif lines:
@@ -262,14 +506,17 @@ class AIExtractorService:
         
         return product
     
+    # ========================================
+    # UTILIDADES
+    # ========================================
     def _combine_ocr_text(self, ocr_data: Dict) -> str:
-        """Combinar texto OCR sin metadatos"""
+        """Combina texto de todas las imágenes OCR"""
         parts = []
         
         for img_type, data in ocr_data.get("images", {}).items():
             text = data.get("text", "").strip()
             if text:
-                parts.append(text)  # ← SOLO TEXTO, sin prefijos
+                parts.append(text)
         
         return "\n\n".join(parts)
     
@@ -293,3 +540,22 @@ class AIExtractorService:
                 "sodium": None
             }
         }
+
+    def _calculate_completeness(self, product: Dict) -> float:
+        """Calcula el % de campos completados"""
+        total_fields = 9  # sin contar nutritional_info interno
+        filled = 0
+
+        for key in ["name", "brand", "presentation", "size",
+                    "barcode", "batch", "expiry_date",
+                    "price", "category"]:
+            if product.get(key):
+                filled += 1
+
+        return filled / total_fields
+
+
+# ========================================
+# INSTANCIA GLOBAL
+# ========================================
+ai_extractor_service = AIExtractorService()
