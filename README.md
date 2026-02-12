@@ -22,6 +22,7 @@
 - [Flujo del Proceso](#-flujo-del-proceso)
 - [Instalación y Configuración](#-instalación-y-configuración)
 - [Estructura del Proyecto](#-estructura-del-proyecto)
+- [Alineación con la Estructura Académica](#-alineación-estructura)
 - [Métricas de Calidad](#-métricas-de-calidad)
 - [Notebooks de Experimentos](#-notebooks-de-experimentos)
 - [Video de Demostración](#-video-de-demostración)
@@ -315,6 +316,54 @@ Esto levanta:
 ├── 📜 README.md
 └── 📜 .env.example
 ```
+
+---
+
+## 🏗️ Alineación con la Estructura Académica `business_backend`
+
+Este proyecto fue desarrollado siguiendo el estándar arquitectónico propuesto en clase (`business_backend`), aplicando una separación clara por capas: **API → Servicios → Dominio → Infraestructura → ML/LLM**.
+
+Aunque la estructura física del repositorio está optimizada para un entorno productivo con FastAPI, conceptualmente respeta el mismo diseño modular exigido en el formato académico.
+
+---
+
+
+## 🔁 Mapeo Conceptual entre Ambas Estructuras
+
+| Estructura Curso (`business_backend`) | Implementación Proyecto | Responsabilidad |
+|--------------------------------------|--------------------------|------------------|
+| `api/` | `app/api/` | Endpoints REST (FastAPI) |
+| `config/` | `app/core/config.py` | Configuración centralizada |
+| `database/` | `app/core/database.py` + `app/models/` | Conexión y modelos ORM |
+| `domain/` | `app/schemas/` | Esquemas Pydantic (contratos de datos) |
+| `services/` | `app/services/` | Lógica de negocio |
+| `llm/` | `app/services/ai/` | Integración Gemini + LLaMA |
+| `ml/` | `app/services/ocr/` + `vector_service.py` | OCR + embeddings |
+| `shared/` | `app/core/` | Configuración compartida |
+| `container.py` | (No requerido en esta implementación) | Inyección de dependencias opcional |
+| `main.py` | `backend/main.py` | Entry point FastAPI |
+
+
+Este diseño garantiza:
+
+- Separación clara de responsabilidades
+- Bajo acoplamiento entre módulos
+- Alta cohesión interna por capa
+- Escalabilidad futura (migración a microservicios)
+- Testabilidad por unidad de servicio
+
+---
+
+### 🎯 Conclusión Arquitectónica
+
+La implementación respeta el patrón estructural propuesto en el formato `business_backend`, adaptándolo a un entorno productivo con FastAPI y servicios de Inteligencia Artificial, manteniendo coherencia arquitectónica y buenas prácticas de ingeniería de software.
+
+---
+
+## 🧠 Diseño por Capas Aplicado
+
+El backend sigue la siguiente jerarquía lógica:
+
 
 ---
 
@@ -619,20 +668,10 @@ Este proyecto está bajo la licencia MIT. Ver el archivo [LICENSE](LICENSE) para
 
 ---
 
-## 🙏 Agradecimientos
-
-- Google Gemini Team por el API de IA
-- Tesseract OCR por el motor de reconocimiento
-- ElevenLabs por el servicio de TTS
-- FastAPI por el framework increíble
-- PostgreSQL + PGVector por la base vectorial
-
----
-
 <div align="center">
 
 **⭐ Si este proyecto te fue útil, considera darle una estrella en GitHub ⭐**
 
-Made with ❤️ by [Tu Nombre] © 2026
+Made with ❤️ by [Andres Morocho] © 2026
 
 </div>
